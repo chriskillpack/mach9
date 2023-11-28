@@ -49,7 +49,13 @@ func main() {
 		log.Fatal("No __text section")
 	}
 
-	// Extract the opcodes
+	// We need the symbols table to help identify where each function begins
+	// and ends in the assembly
+	if mf.Symtab == nil {
+		log.Fatal("Missing symbol table, can't do anything")
+	}
+
+	// Extract the assembled opcodes
 	code := make([]byte, text.Size)
 	if n, err := text.ReadAt(code, 0); n < int(text.Size) || err != nil {
 		if err == nil {
@@ -58,21 +64,20 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// We need the symbols table to help identify where each function begins
-	// and ends in the assembly
-	if mf.Symtab == nil {
-		log.Fatal("Missing symbol table, can't do anything")
-	}
-
 	var symbols []symbol
 
-	// Symbols declared with .global directive have type 15, 14 otherwise
-	// There is this ltmp0 symbol which I don't know what it is, but it can be ignored
 	for _, sym := range mf.Symtab.Syms {
-		if sym.Name[0] == 'l' {
-			// Skip "private link labels"
+		// See notes.md: symbols which start with l are private link labels and
+		// can be ignored. I'm not confident so documenting here but not
+		// implementing.
+
+		// The bottom bit of Type is set if the symbol is an external symbol,
+		// one that can be referenced by the linker and other programs. See
+		// page 44 https://github.com/aidansteele/osx-abi-macho-file-format-reference/blob/master/Mach-O_File_Format.pdf
+		if sym.Type&1 == 0 {
 			continue
 		}
+
 		symbols = append(symbols, symbol{
 			Name: sym.Name, Offset: int(sym.Value),
 		})
