@@ -24,9 +24,12 @@ var (
 	outtemplate = template.Must(template.New("out").Funcs(funcmap).Parse(templ))
 )
 
-const templ = `TEXT ·{{.Name}},NOSPLIT,$0-16
+const (
+	m9prefix = "m9:"
+	templ    = `TEXT ·{{.Name}},NOSPLIT,$0-16
 {{EmitOpcodes .Data}}
 `
+)
 
 type symbol struct {
 	// These fields come from the Mach-O symbol table
@@ -35,7 +38,10 @@ type symbol struct {
 	Data   []byte
 
 	// This comes from the DWARF debugging info
-	DeclLine int64
+	DeclLine int
+
+	// This comes from the source file
+	Markup string
 }
 
 func main() {
@@ -110,17 +116,45 @@ func main() {
 		symmap[start.Name] = start
 	}
 
-	var scanner *bufio.Scanner
 	cu, dwarfOK := parseDWARF(mf, symmap)
 	if dwarfOK {
 		if data, err := os.ReadFile(cu); err == nil {
-			scanner = bufio.NewScanner(bytes.NewBuffer(data))
+			extractDecl(data, symmap)
 		}
 	}
-	_ = scanner
 
 	for _, symbol := range symbols[:len(symbols)-1] {
 		outtemplate.Execute(os.Stdout, symbol)
+	}
+}
+
+func extractDecl(src []byte, symmap map[string]*symbol) {
+	// Sort the symbols in declaration order
+	syms := make([]*symbol, 0, len(symmap))
+	for _, v := range symmap {
+		syms = append(syms, v)
+	}
+	slices.SortFunc(syms, func(a, b *symbol) int {
+		return int(a.DeclLine - b.DeclLine)
+	})
+
+	// Walk through the source front to back looking for declaration markers
+	// on the line immediately preceeding the symbol declarations
+	scanner := bufio.NewScanner(bytes.NewBuffer(src))
+	ln := 1
+	i := 0
+	for scanner.Scan() && i < len(syms) {
+		if ln == syms[i].DeclLine-1 {
+			// Declaration lines contain "m9:"
+			line := scanner.Text()
+			idx := strings.Index(line, m9prefix)
+			if idx != -1 {
+				idx += len(m9prefix)
+				syms[i].Markup = strings.TrimLeft(line[idx:], " \t")
+			}
+			i++
+		}
+		ln++
 	}
 }
 
@@ -169,7 +203,7 @@ func parseDWARF(mf *macho.File, symmap map[string]*symbol) (string, bool) {
 			}
 
 			if sym, ok := symmap[labelName]; ok {
-				sym.DeclLine = declLine
+				sym.DeclLine = int(declLine)
 			}
 		}
 	}

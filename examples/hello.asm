@@ -4,6 +4,7 @@
 .global main, visible
 .align 2
 
+//m9: NOSPLIT,$0-32
 main:
     mov X0, #0
     mov X16, #1
@@ -12,5 +13,6 @@ main:
 local:
     mov x0, #1
 
+//m9:
 visible:
     mov x0, #2
