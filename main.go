@@ -1,11 +1,16 @@
 package main
 
+// TODO - investigate why DWARF labels drop _ prefix from symbols. C thing?
+
 import (
+	"bufio"
+	"bytes"
 	"debug/dwarf"
 	"debug/macho"
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"text/template"
@@ -24,9 +29,13 @@ const templ = `TEXT ·{{.Name}},NOSPLIT,$0-16
 `
 
 type symbol struct {
+	// These fields come from the Mach-O symbol table
 	Name   string
 	Offset int
 	Data   []byte
+
+	// This comes from the DWARF debugging info
+	DeclLine int64
 }
 
 func main() {
@@ -91,57 +100,81 @@ func main() {
 		return int(a.Offset - b.Offset)
 	})
 
+	symmap := make(map[string]*symbol)
+
 	for i := 0; i < len(symbols)-1; i++ {
 		start := &symbols[i]
 		end := &symbols[i+1]
 
 		start.Data = code[start.Offset:end.Offset]
+		symmap[start.Name] = start
 	}
+
+	var scanner *bufio.Scanner
+	cu, dwarfOK := parseDWARF(mf, symmap)
+	if dwarfOK {
+		if data, err := os.ReadFile(cu); err == nil {
+			scanner = bufio.NewScanner(bytes.NewBuffer(data))
+		}
+	}
+	_ = scanner
 
 	for _, symbol := range symbols[:len(symbols)-1] {
 		outtemplate.Execute(os.Stdout, symbol)
 	}
 }
 
-//lint:ignore U1000 This function is incomplete and will be finished later
-func printDWARF(mf *macho.File) {
+// Returns the path to the source file for the compile unit and whether DWARF
+// info was available. It also updates the symbols in the symmap with the
+// declaration line of the symbol.
+func parseDWARF(mf *macho.File, symmap map[string]*symbol) (string, bool) {
 	dwarfdata, err := mf.DWARF()
 	if err != nil {
-		log.Fatal(err)
+		return "", false
 	}
-	fmt.Println("DWARF info")
+
+	var cuPath string
+
 	reader := dwarfdata.Reader()
 	for {
 		entry, err := reader.Next()
 		if err != nil {
-			log.Fatal(err)
-			break
+			return "", false
 		}
 		if entry == nil {
 			break
 		}
 
-		if entry.Tag == dwarf.TagCompileUnit {
+		switch entry.Tag {
+		case dwarf.TagCompileUnit:
 			cuName, ok := entry.Val(dwarf.AttrName).(string)
-			_ = cuName
 			if !ok {
 				continue
 			}
-			lr, err := dwarfdata.LineReader(entry)
-			if err != nil {
+			cuCompDir, ok := entry.Val(dwarf.AttrCompDir).(string)
+			if !ok {
+				continue
+			}
+			cuPath = filepath.Join(cuCompDir, cuName)
+
+		case dwarf.TagLabel:
+			labelName, ok := entry.Val(dwarf.AttrName).(string)
+			if !ok {
 				continue
 			}
 
-			var le dwarf.LineEntry
-			for {
-				if lr.Next(&le) != nil {
-					break
-				}
-				fmt.Printf("entry at line %d in %s: %+v\n", le.Line, le.File.Name, le)
+			declLine, ok := entry.Val(dwarf.AttrDeclLine).(int64)
+			if !ok {
+				continue
+			}
+
+			if sym, ok := symmap[labelName]; ok {
+				sym.DeclLine = declLine
 			}
 		}
-		fmt.Printf("entry %+v\n", entry)
 	}
+
+	return cuPath, true
 }
 
 // Builds a string that contains the opcodes as literal bytes in Plan9 assembler format
