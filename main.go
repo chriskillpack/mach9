@@ -1,11 +1,5 @@
 package main
 
-// TODO
-// - endianness
-// - ARM targets only support WORD, not LONG or BYTE. Using WORD pads to 4 bytes. Investigate what to do?
-// - investigate why DWARF labels drop _ prefix from symbols. C thing?
-// - support data segment
-
 import (
 	"bufio"
 	"bytes"
