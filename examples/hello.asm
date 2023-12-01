@@ -1,11 +1,11 @@
 // Assemble with
 //   as hello.asm -g -o hello.o
 
-.global main, visible
+.global party, visible
 .align 2
 
 //m9: NOSPLIT,$0-32
-main:
+party:
     mov X0, #0
     mov X16, #1
     svc 0

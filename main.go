@@ -1,6 +1,10 @@
 package main
 
-// TODO - investigate why DWARF labels drop _ prefix from symbols. C thing?
+// TODO
+// - endianness
+// - ARM targets only support WORD, not LONG or BYTE. Using WORD pads to 4 bytes. Investigate what to do?
+// - investigate why DWARF labels drop _ prefix from symbols. C thing?
+// - support data segment
 
 import (
 	"bufio"
@@ -8,6 +12,7 @@ import (
 	"debug/dwarf"
 	"debug/macho"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -21,15 +26,18 @@ var (
 		"EmitOpcodes": emitOpcodes,
 	}
 
-	outtemplate = template.Must(template.New("out").Funcs(funcmap).Parse(templ))
+	functemplate = template.Must(template.New("functempl").Funcs(funcmap).Parse(funcTempl))
 )
 
 const (
-	m9prefix = "m9:"
-	templ    = `TEXT ·{{.Name}},NOSPLIT,$0-16
+	m9prefix  = "m9:"
+	funcTempl = `TEXT ·{{.Name}},NOSPLIT,$0-16
 {{EmitOpcodes .Data}}
 `
 )
+
+func party()
+func visible()
 
 type symbol struct {
 	// These fields come from the Mach-O symbol table
@@ -123,9 +131,7 @@ func main() {
 		}
 	}
 
-	for _, symbol := range symbols[:len(symbols)-1] {
-		outtemplate.Execute(os.Stdout, symbol)
-	}
+	generateOutput(os.Stdout, symbols[:len(symbols)-1])
 }
 
 func extractDecl(src []byte, symmap map[string]*symbol) {
@@ -156,6 +162,19 @@ func extractDecl(src []byte, symmap map[string]*symbol) {
 		}
 		ln++
 	}
+}
+
+func generateOutput(w io.Writer, symbols []symbol) error {
+	fmt.Fprint(os.Stdout, `#include "textflag.h"
+
+`)
+	for _, symbol := range symbols {
+		if err := functemplate.Execute(w, symbol); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // Returns the path to the source file for the compile unit and whether DWARF
@@ -221,7 +240,7 @@ func emitOpcodes(code []byte) string {
 	if s > 0 {
 		for i := 0; i < s; i++ {
 			opcodes := code[off : off+4]
-			builder.WriteString(fmt.Sprintf("\tLONG $0x%02X%02X%02X%02X\n", opcodes[0], opcodes[1], opcodes[2], opcodes[3]))
+			builder.WriteString(fmt.Sprintf("\tWORD $0x%02X%02X%02X%02X\n", opcodes[0], opcodes[1], opcodes[2], opcodes[3]))
 			off += 4
 		}
 		n -= s * 4
@@ -238,7 +257,7 @@ func emitOpcodes(code []byte) string {
 
 	for i := 0; i < n; i++ {
 		opcode := code[off]
-		builder.WriteString(fmt.Sprintf("\tBYTE $0x%02X\n", opcode))
+		builder.WriteString(fmt.Sprintf("\tWORD $0x%02X\n", opcode))
 		off++
 	}
 

@@ -14,14 +14,16 @@ Then run it through the tool:
 
 ```
 $ mach9 hello.o
-TEXT ·_main,NOSPLIT,$0-16
-	LONG $0x000080D2
-	LONG $0x300080D2
-	LONG $0x010000D4
-	LONG $0x200080D2
+#include "textflag.h"
 
-TEXT ·_visible,NOSPLIT,$0-16
-	LONG $0x400080D2
+TEXT ·party,NOSPLIT,$0-16
+	WORD $0x000080D2
+	WORD $0x300080D2
+	WORD $0x010000D4
+	WORD $0x200080D2
+
+TEXT ·visible,NOSPLIT,$0-16
+	WORD $0x400080D2
 ```
 
 ## Motivation
