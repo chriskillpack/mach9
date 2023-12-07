@@ -61,3 +61,21 @@ the l is a prefix and means LinkerPrivateGlobalPrefix on macOS platforms. Seemin
 Feel like it should be okay to ignore symbols that start with an l.
 
 Some notes on Go's handling of DWARF debug https://www.grant.pizza/blog/dwarf/
+
+### Literal directives
+
+Go's assembler has 3 directives for embedded literal byte sequences `BYTE`, `WORD` and `DWORD` but support varies by target architectures. By looking at source for each architecture https://github.com/golang/go/blob/master/src/cmd/internal/obj/arm/anames.go
+
+| Platform | `BYTE` | `WORD` | `DWORD` |
+| -------- | ------ | ------ | ------- |
+| ARM      |        |    X   |    X    |
+| ARM64    |        |    X   |    X    |
+| Loong64  |        |    X   |         |
+| MIPS     |        |    X   |         |
+| PPC64    |        |    X   |    X    |
+| RiscV    |        |    X   |         |
+| s390x    |    X   |    X   |    X    |
+| WASM     |        |    X   |         |
+| x86      |    X   |    X   |         |
+
+Next step is to find how they are implemented.
