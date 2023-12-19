@@ -34,13 +34,13 @@ $ mach9 hello.o | tee hello_arm.s
 #include "textflag.h"
 
 TEXT ·party,NOSPLIT,$0-32
-	WORD $0x000080D2
-	WORD $0x300080D2
-	WORD $0x010000D4
-	WORD $0x200080D2
+	WORD $0xd2800000
+	WORD $0xd2800030
+	WORD $0xd4000001
+	WORD $0xd2800020
 
 TEXT ·visible
-	WORD $0x400080D2
+	WORD $0xd2800040
 ```
 
 The output is a valid Plan9 assembly file that contains the assembled code as

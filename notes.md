@@ -79,3 +79,7 @@ Go's assembler has 3 directives for embedded literal byte sequences `BYTE`, `WOR
 | x86      |    X   |    X   |         |
 
 Next step is to find how they are implemented.
+
+### Little Endian
+
+We have assumed that the assembler processes the literals as little endian. x86 and Apple Silicon (ARM) are both little endian. Other platforms have not been tested.

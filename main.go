@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"debug/dwarf"
 	"debug/macho"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"log"
@@ -234,7 +235,7 @@ func emitOpcodes(code []byte) string {
 	if s > 0 {
 		for i := 0; i < s; i++ {
 			opcodes := code[off : off+4]
-			builder.WriteString(fmt.Sprintf("\tWORD $0x%02X%02X%02X%02X\n", opcodes[0], opcodes[1], opcodes[2], opcodes[3]))
+			builder.WriteString(fmt.Sprintf("\tWORD $%#8x\n", binary.LittleEndian.Uint32(opcodes)))
 			off += 4
 		}
 		n -= s * 4
@@ -243,7 +244,7 @@ func emitOpcodes(code []byte) string {
 	if s > 0 {
 		for i := 0; i < s; i++ {
 			opcodes := code[off : off+2]
-			builder.WriteString(fmt.Sprintf("\tWORD $0x%02X%02X\n", opcodes[0], opcodes[1]))
+			builder.WriteString(fmt.Sprintf("\tWORD $%#4x\n", binary.LittleEndian.Uint16(opcodes)))
 			off += 2
 		}
 		n -= s * 2
@@ -251,7 +252,7 @@ func emitOpcodes(code []byte) string {
 
 	for i := 0; i < n; i++ {
 		opcode := code[off]
-		builder.WriteString(fmt.Sprintf("\tWORD $0x%02X\n", opcode))
+		builder.WriteString(fmt.Sprintf("\tWORD $%#2x\n", opcode))
 		off++
 	}
 
