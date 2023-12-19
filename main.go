@@ -26,13 +26,10 @@ var (
 
 const (
 	m9prefix  = "m9:"
-	funcTempl = `TEXT ·{{.Name}},NOSPLIT,$0-16
+	funcTempl = `TEXT {{.Markup}}
 {{EmitOpcodes .Data}}
 `
 )
-
-func party()
-func visible()
 
 type symbol struct {
 	// These fields come from the Mach-O symbol table
@@ -124,6 +121,18 @@ func main() {
 		if data, err := os.ReadFile(cu); err == nil {
 			extractDecl(data, symmap)
 		}
+	}
+
+	// Every symbol requires m9 markup
+	invalid := false
+	for _, v := range symmap {
+		if v.Markup == "" {
+			fmt.Fprintf(os.Stderr, "Symbol %q missing m9 declaration\n", v.Name)
+			invalid = true
+		}
+	}
+	if invalid {
+		os.Exit(1)
 	}
 
 	generateOutput(os.Stdout, symbols[:len(symbols)-1])

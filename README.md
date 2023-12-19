@@ -11,7 +11,7 @@ $ cat hello.asm
 .global party, visible
 .align 2
 
-//m9: NOSPLIT,$0-32
+//m9: ·party(SB),NOSPLIT,$0-32
 party:
     mov X0, #0
     mov X16, #1
@@ -20,7 +20,7 @@ party:
 local:
     mov x0, #1
 
-//m9:
+//m9: ·visible(SB),NOSPLIT,$0
 visible:
     mov x0, #2
 
@@ -33,13 +33,13 @@ Then pass the assembled object file to `mach9`:
 $ mach9 hello.o | tee hello_arm.s
 #include "textflag.h"
 
-TEXT ·party,NOSPLIT,$0-32
+TEXT ·party(SB),NOSPLIT,$0-32
 	WORD $0xd2800000
 	WORD $0xd2800030
 	WORD $0xd4000001
 	WORD $0xd2800020
 
-TEXT ·visible
+TEXT ·visible(SB),NOSPLIT,$0
 	WORD $0xd2800040
 ```
 
