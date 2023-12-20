@@ -124,10 +124,10 @@ func main() {
 		symmap[start.Name] = start
 	}
 
-	cu, dwarfOK := parseDWARF(mf, symmap)
+	cu, _, dwarfOK := parseDWARF(mf, symmap)
 	if dwarfOK {
-		if data, err := os.ReadFile(cu); err == nil {
-			extractDecl(data, symmap)
+		if lines, err := readSourceFile(cu); err == nil {
+			extractDecl(lines, symmap)
 		}
 	}
 
@@ -146,7 +146,7 @@ func main() {
 	generateOutput(os.Stdout, symbols[:len(symbols)-1], strings.Join(os.Args[1:], " "))
 }
 
-func extractDecl(src []byte, symmap map[string]*symbol) {
+func extractDecl(lines []string, symmap map[string]*symbol) {
 	// Sort the symbols in declaration order
 	syms := make([]*symbol, 0, len(symmap))
 	for _, v := range symmap {
@@ -158,21 +158,16 @@ func extractDecl(src []byte, symmap map[string]*symbol) {
 
 	// Walk through the source front to back looking for declaration markers
 	// on the line immediately preceeding the symbol declarations
-	scanner := bufio.NewScanner(bytes.NewBuffer(src))
-	ln := 1
 	i := 0
-	for scanner.Scan() && i < len(syms) {
-		if ln == syms[i].DeclLine-1 {
-			// Declaration lines contain "m9:"
-			line := scanner.Text()
-			idx := strings.Index(line, m9prefix)
-			if idx != -1 {
-				idx += len(m9prefix)
-				syms[i].Markup = strings.TrimLeft(line[idx:], " \t")
-			}
-			i++
+	for i < len(syms) {
+		// Declaration lines contain "m9:"
+		line := lines[syms[i].DeclLine-1]
+		idx := strings.Index(line, m9prefix)
+		if idx != -1 {
+			idx += len(m9prefix)
+			syms[i].Markup = strings.TrimLeft(line[idx:], " \t")
 		}
-		ln++
+		i++
 	}
 }
 
@@ -193,19 +188,20 @@ func generateOutput(w io.Writer, symbols []symbol, invocation string) error {
 // Returns the path to the source file for the compile unit and whether DWARF
 // info was available. It also updates the symbols in the symmap with the
 // declaration line of the symbol.
-func parseDWARF(mf *macho.File, symmap map[string]*symbol) (string, bool) {
+func parseDWARF(mf *macho.File, symmap map[string]*symbol) (string, []dwarf.LineEntry, bool) {
 	dwarfdata, err := mf.DWARF()
 	if err != nil {
-		return "", false
+		return "", nil, false
 	}
 
 	var cuPath string
+	var lentries []dwarf.LineEntry
 
 	reader := dwarfdata.Reader()
 	for {
 		entry, err := reader.Next()
 		if err != nil {
-			return "", false
+			return "", nil, false
 		}
 		if entry == nil {
 			break
@@ -222,6 +218,18 @@ func parseDWARF(mf *macho.File, symmap map[string]*symbol) (string, bool) {
 				continue
 			}
 			cuPath = filepath.Join(cuCompDir, cuName)
+
+			// Read out line entry table for this CU
+			lr, err := dwarfdata.LineReader(entry)
+			if err != nil {
+				continue
+			}
+			var lentry dwarf.LineEntry
+			for lr.Next(&lentry) != io.EOF {
+				if lentry.EndSequence == false {
+					lentries = append(lentries, lentry)
+				}
+			}
 
 		case dwarf.TagLabel:
 			labelName, ok := entry.Val(dwarf.AttrName).(string)
@@ -240,7 +248,7 @@ func parseDWARF(mf *macho.File, symmap map[string]*symbol) (string, bool) {
 		}
 	}
 
-	return cuPath, true
+	return cuPath, lentries, true
 }
 
 // Builds a string that contains the opcodes as literal bytes in Plan9 assembler format
@@ -275,4 +283,22 @@ func emitOpcodes(code []byte) string {
 	}
 
 	return builder.String()
+}
+
+// Returns the source file as an array of strings, one for each line of the
+// file. The first element of the array is empty to allow convenient 1-based
+// indexing.
+func readSourceFile(file string) ([]string, error) {
+	src, err := os.ReadFile(file)
+	if err != nil {
+		return nil, err
+	}
+
+	lines := make([]string, 1)
+	scanner := bufio.NewScanner(bytes.NewBuffer(src))
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+
+	return lines, nil
 }
