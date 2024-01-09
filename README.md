@@ -6,14 +6,18 @@ To use, first write some assembly and run it through your favorite assembler wit
 
 ```
 $ cat hello.asm
+// Assemble with
+//   as hello.asm -g -o hello.o
+
 .global party, visible
 .align 2
 
 //m9: ·party(SB),NOSPLIT,$0-32
 party:
-    mov X0, #0
-    mov X16, #1
-    svc 0
+    ldr x0, [sp, #8]    ; this is a comment
+    ldr x1, [sp, #16]   // also a comment
+    add x0, x0, x1
+    ret
 
 local:
     mov x0, #1
@@ -36,13 +40,13 @@ $ mach9 hello.o | tee hello_arm.s
 #include "textflag.h"
 
 TEXT ·party(SB),NOSPLIT,$0-32
-	WORD $0xd2800000
-	WORD $0xd2800030
-	WORD $0xd4000001
-	WORD $0xd2800020
+	WORD $0xf94007e0 // ldr x0, [sp, #8]
+	WORD $0xf9400be1 // ldr x1, [sp, #16]
+	WORD $0x8b010000 // add x0, x0, x1
+	WORD $0xd65f03c0 // ret
 
 TEXT ·visible(SB),NOSPLIT,$0
-	WORD $0xd2800040
+	WORD $0xd2800040 // mov x0, #2
 ```
 
 The output is a valid Plan9 assembly file that contains the assembled code as
